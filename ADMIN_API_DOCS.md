@@ -1,280 +1,321 @@
-# 01. ADMIN APIs Documentation
+# Admin Approval Endpoints
 
-## User Management
+This document lists API endpoints used by Admins (and Hub Managers where noted) to approve or reject merchants, documents, stores, riders, transfer records, and delivery verification requests.
 
-### Create Admin
+All endpoints below are protected and require an admin JWT (Bearer token). The `Roles` guard is used to limit access — see each endpoint for required roles.
 
-**Method:** `POST`  
-**Endpoint:** `{{baseUrl}}/admin`
+---
 
-#### Headers
+## Merchants
 
-| Key | Value | Description |
-|------|--------|-------------|
-| Content-Type | application/json | |
+### Get merchants with pending documents
+- Method: GET
+- Path: /merchants/pending-documents
+- Roles: ADMIN
+- Query: none
+- Body: none
+- Success response (200):
 
-#### Request Body
-
-```json
 {
-  "fullName": "Admin",
-  "phone": "+8801700001001",
-  "password": "Admin123!"
+  "merchants": [ /* array of merchant summary objects */ ],
+  "message": "Merchants with pending documents retrieved successfully"
 }
+
+---
+
+### Approve merchant account
+- Method: PATCH
+- Path: /merchants/:id/approve
+- Roles: ADMIN
+- Body: none
+- Success response (200):
+
+{
+  "id": "<merchant-id>",
+  "status": "APPROVED",
+  "message": "Merchant approved successfully"
+}
+
+---
+
+### Decline merchant (permanent)
+- Method: PATCH
+- Path: /merchants/:id/decline
+- Roles: ADMIN
+- Body: none
+- Success response (200):
+
+{
+  "id": "<merchant-id>",
+  "status": "DECLINED",
+  "is_active": false,
+  "message": "Merchant declined permanently"
+}
+
+---
+
+### Approve merchant documents (NID / Trade License / TIN / BIN)
+- Method: PATCH
+- Paths:
+  - /merchants/:id/documents/nid/approve
+  - /merchants/:id/documents/trade-license/approve
+  - /merchants/:id/documents/tin/approve
+  - /merchants/:id/documents/bin/approve
+- Roles: ADMIN
+- Body: none
+- Success response (200):
+
+{
+  "merchant_id": "<merchant-id>",
+  "document_type": "nid|trade_license|tin|bin",
+  "verified": true,
+  "message": "<DOCUMENT> document approved successfully"
+}
+
+Notes: There is currently no dedicated "reject document" admin route. To reject a merchant document, admins may either decline the merchant (`PATCH /merchants/:id/decline`) or request changes via internal workflow.
+
+---
+
+## Stores
+
+### Admin approve store
+- Method: PATCH
+- Path: /stores/admin/:id/approve
+- Roles: ADMIN
+- Body: none
+- Success response (200):
+
+{
+  "store": { /* full store detail object */ },
+  "message": "Store approved successfully"
+}
+
+### Admin decline store
+- Method: PATCH
+- Path: /stores/admin/:id/decline
+- Roles: ADMIN
+- Body: none
+- Success response (200):
+
+{
+  "store": { /* full store detail object */ },
+  "message": "Store declined successfully"
+}
+
+### Admin list stores (with status filter)
+- Method: GET
+- Path: /stores/admin/all
+- Roles: ADMIN
+- Query params:
+  - `merchant_id` (optional)
+  - `status` (optional) e.g., `PENDING`, `APPROVED`
+  - `page`, `limit`, `search`
+- Success response (200):
+
+{
+  "stores": [ /* array of store objects */ ],
+  "total": 123,
+  "pagination": { /* page/limit/totalPages */ },
+  "message": "All stores retrieved successfully"
+}
+
+---
+
+## Riders
+
+### Approve rider
+- Method: PATCH
+- Path: /riders/:id/approve
+- Roles: ADMIN
+- Body: none
+- Success response (200):
+
+{
+  "success": true,
+  "data": { /* rider detail */ },
+  "message": "Rider approved successfully"
+}
+
+### Reject rider
+- Method: PATCH
+- Path: /riders/:id/reject
+- Roles: ADMIN
+- Body: none
+- Success response (200):
+
+{
+  "success": true,
+  "data": { /* rider detail */ },
+  "message": "Rider rejected"
+}
+
+---
+
+## Hub Transfer Records
+
+### Approve transfer record
+- Method: PATCH
+- Path: /admin/hub-transfer-records/:id/approve
+- Roles: ADMIN
+- Body (optional):
+
+{
+  "admin_notes": "Optional admin notes"
+}
+
+- Success response (200):
+
+{
+  "success": true,
+  "data": { "transfer_record": { /* record object */ } },
+  "message": "Transfer record approved successfully"
+}
+
+### Reject transfer record
+- Method: PATCH
+- Path: /admin/hub-transfer-records/:id/reject
+- Roles: ADMIN
+- Body (required):
+
+{
+  "rejection_reason": "Reason for rejection",
+  "admin_notes": "Optional admin notes"
+}
+
+- Success response (200):
+
+{
+  "success": true,
+  "data": { "transfer_record": { /* record object */ } },
+  "message": "Transfer record rejected successfully"
+}
+
+---
+
+## Delivery Verification (Hub Approval)
+
+These endpoints are used by Hub Managers and Admins to approve or reject OTP bypass / hub approval requests.
+
+### Get pending hub approval requests
+- Method: GET
+- Path: /delivery-verifications/hub-approval/pending
+- Roles: HUB_MANAGER, ADMIN
+- Query: optional hub scope
+- Success response (200): list of pending requests.
+
+### Approve hub approval request
+- Method: PATCH
+- Path: /delivery-verifications/:id/hub-approval/approve
+- Roles: HUB_MANAGER, ADMIN
+- Body: none
+- Success response (200): verification updated and delivery completed where applicable.
+
+### Reject hub approval request
+- Method: PATCH
+- Path: /delivery-verifications/:id/hub-approval/reject
+- Roles: HUB_MANAGER, ADMIN
+- Body (required):
+
+{
+  "rejection_reason": "Reason (min 5 chars)"
+}
+
+- Success response (200): verification rejected.
+
+---
+
+## Examples (cURL)
+
+Approve merchant document (NID):
+
+```bash
+curl -X PATCH \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  https://api.example.com/merchants/<MERCHANT_ID>/documents/nid/approve
 ```
 
-#### Response (201 Created)
+Approve hub transfer record with notes:
 
-```json
+```bash
+curl -X PATCH \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"admin_notes":"Checked, looks good"}' \
+  https://api.example.com/admin/hub-transfer-records/<RECORD_ID>/approve
+```
+
+Reject transfer record example:
+
+```bash
+curl -X PATCH \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"rejection_reason":"Invalid paperwork", "admin_notes":"Missing signature"}' \
+  https://api.example.com/admin/hub-transfer-records/<RECORD_ID>/reject
+```
+
+---
+
+If you want, I can:
+- Add explicit `reject document` endpoints for merchant documents (server currently lacks those), or
+- Generate OpenAPI snippets for these routes.
+
+---
+
+## Customer Fraud Requests (Admin)
+
+These endpoints allow admins to review fraud reports submitted by merchants and either approve or reject them.
+
+### List fraud requests (Admin)
+- Method: GET
+- Path: /customers/fraud/admin/requests
+- Roles: ADMIN
+- Query params: `status` (optional: PENDING/APPROVED/REJECTED), `page`, `limit`, `search`
+- Success response (200):
+
+{
+  "success": true,
+  "data": [ /* array of fraud request objects */ ],
+  "pagination": { /* page/limit/total */ },
+  "message": "Fraud requests retrieved successfully"
+}
+
+### Review (approve/reject) a fraud request
+- Method: PATCH
+- Path: /customers/fraud/admin/requests/:requestId/review
+- Roles: ADMIN
+- Body (example):
+
+Approve example:
+
+{
+  "action": "APPROVE",
+  "admin_note": "Verified from logs, marking as fraud"
+}
+
+Reject example:
+
+{
+  "action": "REJECT",
+  "admin_note": "Insufficient evidence"
+}
+
+- Success response (200):
+
 {
   "success": true,
   "data": {
-    "id": "ecadb401-3304-416d-bf5e-ca209f8898ce",
-    "full_name": "Admin",
-    "phone": "+8801700001001",
-    "email": null,
-    "role": "ADMIN",
-    "is_active": true,
-    "reset_otp": null,
-    "reset_otp_expires": null,
-    "created_at": "2026-01-23T05:54:47.856Z",
-    "updated_at": "2026-01-23T05:54:47.856Z"
+    "id": "<request-id>",
+    "customer_id": "<customer-id>",
+    "merchant_id": "<merchant-id>",
+    "status": "APPROVED|REJECTED",
+    "admin_note": "...",
+    "reviewed_by_admin_id": "<admin-user-id>",
+    "reviewed_at": "2026-06-14T10:00:00.000Z"
   },
-  "message": "Admin user created successfully",
-  "timestamp": "2026-01-23T05:54:47.872Z"
+  "message": "Fraud request reviewed successfully"
 }
-```
 
----
+Notes: The request uses `ReviewCustomerFraudDto` with `action` enum values `APPROVE` or `REJECT`, and an optional `admin_note`.
 
-### Get All Users
 
-**Method:** `GET`  
-**Endpoint:** `{{baseUrl}}/admin`
-
----
-
-### Get User By ID
-
-**Method:** `GET`  
-**Endpoint:** `{{baseUrl}}/admin/:id`
-
-#### Path Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| id | {{merchantId}} | |
-
----
-
-### Update User
-
-**Method:** `PATCH`  
-**Endpoint:** `{{baseUrl}}/admin/:id`
-
-#### Headers
-
-| Key | Value | Description |
-|------|--------|-------------|
-| Content-Type | application/json | |
-
-#### Path Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| id | {{merchantId}} | |
-
-#### Request Body
-
-```json
-{
-  "fullName": "Updated Name",
-  "phone": "01788888888",
-  "email": "updated@courier.com"
-}
-```
-
----
-
-### Delete User
-
-**Method:** `DELETE`  
-**Endpoint:** `{{baseUrl}}/admin/:id`
-
-#### Path Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| id | user-uuid | |
-
----
-
-### Deactivate User
-
-**Method:** `PATCH`  
-**Endpoint:** `{{baseUrl}}/admin/:id/deactivate`
-
-#### Path Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| id | {{merchantId}} | |
-
----
-
-### Activate User
-
-**Method:** `PATCH`  
-**Endpoint:** `{{baseUrl}}/admin/:id/activate`
-
-#### Path Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| id | {{merchantId}} | |
-
----
-
-# Merchant Management
-
-## Invoice Management
-
-### Get Eligible Parcels for Invoice
-
-**Method:** `GET`  
-**Endpoint:** `{{baseUrl}}/merchant-invoices/eligible-parcels?merchant_id=3cd043c7-2b98-4ca0-b34b-4f59e0bbcabd`
-
-#### Headers
-
-| Key | Value | Description |
-|------|--------|-------------|
-| Content-Type | application/json | |
-
-#### Query Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| merchant_id | 3cd043c7-2b98-4ca0-b34b-4f59e0bbcabd | |
-
-#### Request Body
-
-```json
-{
-  "method_type": "BANK_ACCOUNT",
-  "bank_name": "Dutch Bangla Bank",
-  "branch_name": "Dhaka Main Branch",
-  "account_holder_name": "John Doe",
-  "account_number": "1234567890",
-  "routing_number": "090123456"
-}
-```
-
----
-
-### Create Invoice
-
-**Method:** `POST`  
-**Endpoint:** `{{baseUrl}}/merchant-invoices`
-
-#### Headers
-
-| Key | Value | Description |
-|------|--------|-------------|
-| Content-Type | application/json | |
-
-#### Request Body
-
-```json
-{
-  "merchant_id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
-  "parcel_ids": [
-    "parcel-uuid-1",
-    "parcel-uuid-2",
-    "parcel-uuid-3"
-  ]
-}
-```
-
----
-
-### Mark Invoice as Paid
-
-**Method:** `POST`  
-**Endpoint:** `{{baseUrl}}/merchant-invoices/:id/pay`
-
-#### Path Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| id | invoice-uuid | |
-
----
-
-### List All Invoices
-
-**Method:** `GET`  
-**Endpoint:** `{{baseUrl}}/merchant-invoices?invoice_status=UNPAID&page=1&limit=10`
-
-#### Query Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| invoice_status | UNPAID | UNPAID \| PROCESSING \| PAID |
-| merchant_id | merchant-uuid | |
-| fromDate | 2024-01-01 | |
-| toDate | 2024-12-31 | |
-| page | 1 | |
-| limit | 10 | |
-
----
-
-### Get Invoice Details
-
-**Method:** `GET`  
-**Endpoint:** `{{baseUrl}}/merchant-invoices/:id`
-
-#### Path Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| id | 4715133f-2bc8-46a0-8efa-be849d85530d | |
-
----
-
-### Update Invoice Status
-
-**Method:** `PATCH`  
-**Endpoint:** `{{baseUrl}}/merchant-invoices/:id/status`
-
-#### Headers
-
-| Key | Value | Description |
-|------|--------|-------------|
-| Content-Type | application/json | |
-
-#### Path Parameters
-
-| Key | Value | Description |
-|------|--------|-------------|
-| id | invoice-uuid-456 | |
-
-#### Request Body
-
-```json
-{
-  "invoice_status": "PROCESSING"
-}
-```
-
----
-
-### Export Pending Invoices
-
-**Method:** `GET`  
-**Endpoint:** `{{baseUrl}}/merchant-invoices/export/pending`
-
-#### Response (200 OK)
-
-```text
-PK
-```
